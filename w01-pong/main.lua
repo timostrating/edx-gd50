@@ -60,6 +60,9 @@ function love.load()
     -- important for a nice crisp, 2D look
     love.graphics.setDefaultFilter('nearest', 'nearest')
 
+    -- set the title of our application window
+    love.window.setTitle('Pong')
+
     -- seed the RNG so that calls to random are always random
     math.randomseed(os.time())
 
@@ -68,22 +71,22 @@ function love.load()
     largeFont = love.graphics.newFont('font.ttf', 16)
     scoreFont = love.graphics.newFont('font.ttf', 32)
     love.graphics.setFont(smallFont)
-    
-    -- initialize our virtual resolution, which will be rendered within our
-    -- actual window no matter its dimensions
-    push:setupScreen(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT, {
-        vsync = true,
-        fullscreen = false,
-        resizable = true
-    })
 
     -- set up our sound effects; later, we can just index this table and
     -- call each entry's `play` method
     sounds = {
-        ['paddle_hit'] = love.audio.newSource('sounds/paddle_hit.wav'),
-        ['score'] = love.audio.newSource('sounds/score.wav'),
-        ['wall_hit'] = love.audio.newSource('sounds/wall_hit.wav')
+        ['paddle_hit'] = love.audio.newSource('sounds/paddle_hit.wav', 'static'),
+        ['score'] = love.audio.newSource('sounds/score.wav', 'static'),
+        ['wall_hit'] = love.audio.newSource('sounds/wall_hit.wav', 'static')
     }
+    
+    -- initialize our virtual resolution, which will be rendered within our
+    -- actual window no matter its dimensions
+    push:setupScreen(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT, {
+        fullscreen = false,
+        resizable = true,
+        vsync = true
+    })
 
     -- initialize our player paddles; make them global so that they can be
     -- detected by other functions and modules
@@ -111,11 +114,6 @@ function love.load()
     -- 3. 'play' (the ball is in play, bouncing between paddles)
     -- 4. 'done' (the game is over, with a victor, ready for restart)
     gameState = 'start'
-
-    -- a table we'll use to keep track of which keys have been pressed this
-    -- frame, to get around the fact that LÖVE's default callback won't let us
-    -- test for input from within other functions
-    love.keyboard.keysPressed = {}
 end
 
 --[[
@@ -137,24 +135,14 @@ end
     across system hardware.
 ]]
 function love.update(dt)
-    if gameState == 'start' then
-        -- pressing enter will begin the game
-        if love.keyboard.wasPressed('enter') or love.keyboard.wasPressed('return') then
-            gameState = 'serve'
-        end
-    elseif gameState == 'serve' then
-        -- pressing enter will serve the ball
-        if love.keyboard.wasPressed('enter') or love.keyboard.wasPressed('return') then
-            gameState = 'play'
-
-            -- before switching to play, initialize ball's velocity based
-            -- on player who last scored
-            ball.dy = math.random(-50, 50)
-            if servingPlayer == 1 then
-                ball.dx = math.random(140, 200)
-            else
-                ball.dx = -math.random(140, 200)
-            end
+    if gameState == 'serve' then
+        -- before switching to play, initialize ball's velocity based
+        -- on player who last scored
+        ball.dy = math.random(-50, 50)
+        if servingPlayer == 1 then
+            ball.dx = math.random(140, 200)
+        else
+            ball.dx = -math.random(140, 200)
         end
     elseif gameState == 'play' then
         -- detect ball collision with paddles, reversing dx if true and
@@ -164,17 +152,11 @@ function love.update(dt)
             ball.dx = -ball.dx * 1.03
             ball.x = player1.x + 5
 
-            -- formula for adjusting the angle of the ball when hit by the
-            -- paddle; if the ball hits the paddle above its midpoint, then
-            -- the dy should be negative and scaled by how far above the
-            -- midpoint it hits; the opposite is true for below the midpoint,
-            -- only the dy should be positive
-            if ball.y < player1.y + player1.height / 2 then
-                ball.dy = -math.random(50, 100) * (player1.y + 
-                    (player1.height / 2)) / ball.y
+            -- keep velocity going in the same direction, but randomize it
+            if ball.dy < 0 then
+                ball.dy = -math.random(10, 150)
             else
-                ball.dy = math.random(50, 100) * 
-                    (player1.y + player1.height) / ball.y
+                ball.dy = math.random(10, 150)
             end
 
             sounds['paddle_hit']:play()
@@ -183,12 +165,11 @@ function love.update(dt)
             ball.dx = -ball.dx * 1.03
             ball.x = player2.x - 4
 
-            if ball.y < player2.y + player2.height / 2 then
-                ball.dy = -math.random(50, 100) * (player2.y + 
-                    (player2.height / 2)) / ball.y
+            -- keep velocity going in the same direction, but randomize it
+            if ball.dy < 0 then
+                ball.dy = -math.random(10, 150)
             else
-                ball.dy = math.random(50, 100) * 
-                    (player2.y + player2.height) / ball.y
+                ball.dy = math.random(10, 150)
             end
 
             sounds['paddle_hit']:play()
@@ -209,7 +190,7 @@ function love.update(dt)
             sounds['wall_hit']:play()
         end
 
-        -- if we reach the left or right edge of the screen, go back to serve
+        -- if we reach the left edge of the screen, go back to serve
         -- and update the score and serving player
         if ball.x < 0 then
             servingPlayer = 1
@@ -228,37 +209,22 @@ function love.update(dt)
             end
         end
 
+        -- if we reach the right edge of the screen, go back to serve
+        -- and update the score and serving player
         if ball.x > VIRTUAL_WIDTH then
             servingPlayer = 2
             player1Score = player1Score + 1
             sounds['score']:play()
 
+            -- if we've reached a score of 10, the game is over; set the
+            -- state to done so we can show the victory message
             if player1Score == 10 then
                 winningPlayer = 1
                 gameState = 'done'
             else
                 gameState = 'serve'
+                -- places the ball in the middle of the screen, no velocity
                 ball:reset()
-            end
-        end
-
-    elseif gameState == 'done' then
-        -- game is simply in a restart phase here, but will set the serving
-        -- player to the opponent of whomever won for fairness!
-        if love.keyboard.wasPressed('enter') or love.keyboard.wasPressed('return') then
-            gameState = 'serve'
-
-            ball:reset()
-
-            -- reset scores to 0
-            player1Score = 0
-            player2Score = 0
-
-            -- decide serving player as the opposite of who won
-            if winningPlayer == 1 then
-                servingPlayer = 2
-            else
-                servingPlayer = 1
             end
         end
     end
@@ -284,14 +250,14 @@ function love.update(dt)
         player2.dy = 0
     end
 
+    -- update our ball based on its DX and DY only if we're in play state;
+    -- scale the velocity by dt so movement is framerate-independent
+    if gameState == 'play' then
+        ball:update(dt)
+    end
+
     player1:update(dt)
     player2:update(dt)
-
-    -- update ball's position
-    ball:update(dt)
-
-    -- clear the table for keys pressed, as the frame has ended
-    love.keyboard.keysPressed = {}
 end
 
 --[[
@@ -305,22 +271,31 @@ function love.keypressed(key)
     if key == 'escape' then
         -- the function LÖVE2D uses to quit the application
         love.event.quit()
-    end 
+    -- if we press enter during either the start or serve phase, it should
+    -- transition to the next appropriate state
+    elseif key == 'enter' or key == 'return' then
+        if gameState == 'start' then
+            gameState = 'serve'
+        elseif gameState == 'serve' then
+            gameState = 'play'
+        elseif gameState == 'done' then
+            -- game is simply in a restart phase here, but will set the serving
+            -- player to the opponent of whomever won for fairness!
+            gameState = 'serve'
 
-    -- add to our table of keys pressed this frame
-    love.keyboard.keysPressed[key] = true
-end
+            ball:reset()
 
---[[
-    A custom function that will let us test for individual keystrokes outside
-    of the default `love.keypressed` callback, since we can't call that logic
-    elsewhere by default.
-]]
-function love.keyboard.wasPressed(key)
-    if love.keyboard.keysPressed[key] then
-        return true
-    else
-        return false
+            -- reset scores to 0
+            player1Score = 0
+            player2Score = 0
+
+            -- decide serving player as the opposite of who won
+            if winningPlayer == 1 then
+                servingPlayer = 2
+            else
+                servingPlayer = 1
+            end
+        end
     end
 end
 
