@@ -49,6 +49,7 @@ VIRTUAL_HEIGHT = 243
 
 -- paddle movement speed
 PADDLE_SPEED = 200
+DIFFICULTY = 1.75
 
 --[[
     Called just once at the beginning of the game; used to set up
@@ -241,11 +242,11 @@ function love.update(dt)
         player1.dy = 0
     end
 
-    -- player 2
-    if love.keyboard.isDown('up') then
-        player2.dy = -PADDLE_SPEED
-    elseif love.keyboard.isDown('down') then
-        player2.dy = PADDLE_SPEED
+    -- player2
+    if player2.y > ball.y and VIRTUAL_WIDTH / 2 < ball.x then
+        player2.dy = -PADDLE_SPEED  / DIFFICULTY
+    elseif player2.y < ball.y and VIRTUAL_WIDTH / 2 < ball.x then
+        player2.dy = PADDLE_SPEED / DIFFICULTY
     else
         player2.dy = 0
     end
